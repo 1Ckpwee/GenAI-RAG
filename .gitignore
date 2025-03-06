@@ -17,3 +17,6 @@ __pycache__/
 
 # Makefile
 Makefile
+
+# Uploads
+uploads/

@@ -5,11 +5,12 @@ Helper functions module for LangChain with Deepseek example project
 import os
 from dotenv import load_dotenv
 from langchain_deepseek import ChatDeepSeek
-from langchain_deepseek.embeddings import DeepSeekEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_weaviate import WeaviateVectorStore
 import weaviate
+from weaviate.auth import AuthApiKey
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Load environment variables
@@ -43,16 +44,16 @@ def get_deepseek_llm(temperature=0.7, max_tokens=1024, model_name="deepseek-chat
 
 def get_deepseek_embeddings():
     """
-    Initialize and return a Deepseek embeddings model
+    Initialize and return a HuggingFace embeddings model using multi-qa-MiniLM-L6-cos-v1
     
     Returns:
-        DeepSeekEmbeddings: Initialized Deepseek embeddings model
+        HuggingFaceEmbeddings: Initialized HuggingFace embeddings model
     """
-    api_key = os.getenv("DEEPSEEK_API_KEY")
-    if not api_key:
-        raise ValueError("DEEPSEEK_API_KEY environment variable not found, please set it in the .env file")
-    
-    return DeepSeekEmbeddings()
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/multi-qa-MiniLM-L6-cos-v1",
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True}
+    )
 
 def create_simple_chain(llm, template):
     """
@@ -88,19 +89,21 @@ def get_weaviate_client():
     Initialize and return a Weaviate client
     
     Returns:
-        weaviate.Client: Initialized Weaviate client
+        weaviate.WeaviateClient: Initialized Weaviate client
     """
     weaviate_url = os.getenv("WEAVIATE_URL")
-    weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
+    weaviate_grpc_port = os.getenv("WEAVIATE_GRPC_PORT", "50051")  # Default gRPC port is 50051
     
     if not weaviate_url:
         raise ValueError("WEAVIATE_URL environment variable not found, please set it in the .env file")
     
-    auth_config = weaviate.auth.AuthApiKey(api_key=weaviate_api_key) if weaviate_api_key else None
     
-    return weaviate.Client(
-        url=weaviate_url,
-        auth_client_secret=auth_config
+    # Using the new WeaviateClient API (v4)
+    return weaviate.WeaviateClient(
+        connection_params=weaviate.ConnectionParams.from_url(
+            url=weaviate_url,
+            grpc_port=int(weaviate_grpc_port),  # Convert to integer as required
+        )
     )
 
 def create_vector_store(texts, embeddings, index_name="Documents"):
@@ -118,8 +121,8 @@ def create_vector_store(texts, embeddings, index_name="Documents"):
     client = get_weaviate_client()
     
     # Check if class exists and delete if it does
-    if client.schema.exists(index_name):
-        client.schema.delete_class(index_name)
+    if client.collections.exists(index_name):
+        client.collections.delete(index_name)
     
     # Create text splitter
     text_splitter = RecursiveCharacterTextSplitter(
