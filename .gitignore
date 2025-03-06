@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+
+# .venv
+.venv/  
+
+# .env
+.env
+
+# .env.local
+.env.local
+
+# Makefile
+Makefile
